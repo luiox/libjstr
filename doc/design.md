@@ -19,7 +19,8 @@ UTF-8 世界清晰隔开。
 
 - **`mutf8_string`** —— MUTF-8 字节容器：`MUtf8String`（拥有）/
   `MUtf8StringRef`（非拥有视图）。只持有字节，不校验不转码。
-- **`conversion`** —— UTF-8 ⇄ MUTF-8 转换 + 校验，是两个编码世界的边界。
+- **`conversion`** —— UTF-8 ⇄ MUTF-8 转换 + 校验，是两个编码世界的边界；另提供
+  WTF-8（逐码元保留代理，成对代理不合并为 4 字节）与 Latin-1 辅助转换。
 
 ## 关键设计决策
 
@@ -35,6 +36,8 @@ UTF-8 世界清晰隔开。
 - **strict**（默认）：任何畸形序列都报精确错误，代理对不完整或非法组合一律拒绝。
 - **lenient**：仅当 `allow_lossy_replacement=true` 时，把畸形序列替换为 `U+FFFD`
   后继续；该标志为 false 时 lenient 仍然拒绝畸形输入。strict 模式下该标志被忽略。
+- 校验入口 `validate_utf8` / `validate_mutf8` 不做有损替换：两种模式都按 strict
+  校验，`ConversionValidationMode` 参数仅为与转换入口 API 对称而保留。
 
 每种策略既有「显式传 `ConversionOptions`」的入口，也有
 `*_strict` / `*_lenient` 便捷封装。
