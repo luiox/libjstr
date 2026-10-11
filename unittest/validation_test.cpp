@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <string>
+#include <vector>
 #include "jstr/conversion.hpp"
 
 using namespace ca;
@@ -74,6 +75,41 @@ TEST(LibJstrValidateTest, ValidateMutf8RejectsNullData)
     EXPECT_EQ(r.unwrap_err().code, EncodingErrorCode::kInvalidInput);
 }
 
+// 校验入口不做有损替换：kLenient 也执行严格校验（mode 仅为 API 对称保留）。
+TEST(LibJstrValidateTest, ValidateUtf8LenientModeStillValidates)
+{
+    const std::string bad = std::string("A") + static_cast<char>(0xFF);
+    auto              r   = validate_utf8(bad, ConversionValidationMode::kLenient);
+    ASSERT_TRUE(r.is_err());
+    EXPECT_EQ(r.unwrap_err().code, EncodingErrorCode::kInvalidUtf8Sequence);
+}
+
+TEST(LibJstrValidateTest, ValidateMutf8LenientModeStillValidates)
+{
+    const std::string m("\xED\xA0\xBD", 3);   // 未配对高代理
+    auto              r = validate_mutf8(MUtf8StringRef(m.data(), m.size()), ConversionValidationMode::kLenient);
+    ASSERT_TRUE(r.is_err());
+    EXPECT_EQ(r.unwrap_err().code, EncodingErrorCode::kInvalidMutf8Sequence);
+}
+
+// C0 80 属 overlong 编码，标准 UTF-8 不允许：与 utf8_to_mutf8 strict 的拒绝结论一致。
+TEST(LibJstrValidateTest, ValidateUtf8RejectsOverlongTwoByte)
+{
+    const std::string overlong("\xC0\x80", 2);
+    auto              r = validate_utf8(overlong);
+    ASSERT_TRUE(r.is_err());
+    EXPECT_EQ(r.unwrap_err().code, EncodingErrorCode::kInvalidUtf8Sequence);
+}
+
+// 孤立低位代理：strict 必须拒绝。
+TEST(LibJstrValidateTest, ValidateMutf8RejectsOrphanLowSurrogate)
+{
+    const std::string m("\xED\xB8\x80", 3);
+    auto              r = validate_mutf8(MUtf8StringRef(m.data(), m.size()));
+    ASSERT_TRUE(r.is_err());
+    EXPECT_EQ(r.unwrap_err().code, EncodingErrorCode::kInvalidMutf8Sequence);
+}
+
 // ---- MUtf8String / MUtf8StringRef basic accessors ----
 
 TEST(LibJstrMutf8StringTest, OwnedStringExposesBytesViewAndSize)
@@ -92,6 +128,22 @@ TEST(LibJstrMutf8StringTest, RefFromCStr)
     MUtf8StringRef ref = MUtf8StringRef::from_c_str("abc");
     EXPECT_EQ(ref.size(), 3u);
     EXPECT_FALSE(ref.empty());
+}
+
+TEST(LibJstrMutf8StringTest, RefFromCStrNullGivesEmpty)
+{
+    MUtf8StringRef ref = MUtf8StringRef::from_c_str(nullptr);
+    EXPECT_TRUE(ref.empty());
+    EXPECT_EQ(ref.data(), nullptr);
+}
+
+// 从 std::vector<u8> 构造：拷贝字节。
+TEST(LibJstrMutf8StringTest, ConstructFromByteVector)
+{
+    const std::vector<ca::u8> raw = {'h', 'i'};
+    MUtf8String               s(raw);
+    EXPECT_EQ(s.size(), 2u);
+    EXPECT_EQ(s.bytes(), "hi");
 }
 
 TEST(LibJstrMutf8StringTest, DefaultRefIsEmpty)

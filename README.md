@@ -10,7 +10,8 @@ MUTF-8 与标准 UTF-8 的互转与校验。是 class 文件字节世界与程�
 
 - `src/jstr/mutf8_string.hpp/.cpp` —— MUTF-8 字节容器
   （`MUtf8String` 拥有 / `MUtf8StringRef` 视图）。
-- `src/jstr/conversion.hpp/.cpp` —— UTF-8 ⇄ MUTF-8 转换 + 校验。
+- `src/jstr/conversion.hpp/.cpp` —— UTF-8 ⇄ MUTF-8 转换 + 校验，另含 WTF-8
+  （逐码元保留代理）与 Latin-1 辅助载体转换。
 - `unittest/` —— 单元测试。
 
 命名空间 `jstr`，依赖 libca（core/str 模块）。对外公开 `src`：

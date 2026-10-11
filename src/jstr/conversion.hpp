@@ -27,10 +27,12 @@ enum class EncodingErrorCode : ca::u32
     kUnsupportedCodePoint = 5,   ///< Code point not representable in the target.
 };
 
-/// @brief Validation strictness.
+/// @brief 校验/转换的宽严档位。
 ///
-/// kStrict rejects any ill-formed sequence with a precise error. kLenient only
-/// has an effect together with ConversionOptions::allow_lossy_replacement.
+/// kStrict 对任何畸形序列报精确错误。kLenient 只在与
+/// ConversionOptions::allow_lossy_replacement 搭配时才改变转换行为（畸形输入
+/// 替换为 U+FFFD 后继续）；单独使用时仍拒绝畸形输入。validate_* 校验入口不做
+/// 有损替换：两种模式都执行严格校验。
 enum class ConversionValidationMode : ca::u8
 {
     kStrict  = 0,
@@ -52,9 +54,9 @@ struct ConversionOptions
 /// @brief Error detail returned inside ca::Result on failure.
 struct EncodingError
 {
-    EncodingErrorCode code   = EncodingErrorCode::kInvalidInput;
+    EncodingErrorCode code   = EncodingErrorCode::kInvalidInput;  ///< 错误类别。
     ca::usize         offset = 0;   ///< Byte offset where the error was detected.
-    std::string       message;
+    std::string       message;      ///< 简短英文描述（诊断/日志用，非稳定文案）。
 };
 
 // === MUTF-8 -> UTF-8 ===
@@ -71,6 +73,7 @@ ca::Result<std::string, EncodingError> mutf8_to_utf8(const MUtf8String& mutf8,
 /// Decode JVM MUTF-8 into a WTF-8 byte carrier without rejecting unpaired UTF-16
 /// surrogate code units. This is only for bytecode constants that must preserve
 /// their original JVM String code units; ordinary text should use mutf8_to_utf8.
+/// 成对代理同样按两个 3 字节单元逐字保留，不合并为 4 字节 UTF-8；wtf8_to_mutf8 是其逆变换。
 ca::Result<std::string, EncodingError> mutf8_to_wtf8(MUtf8StringRef mutf8);
 
 // === UTF-8 -> MUTF-8 ===
@@ -92,7 +95,8 @@ ca::Result<MUtf8String, EncodingError> wtf8_to_mutf8(const std::string& wtf8);
 ca::Result<MUtf8String, EncodingError> latin1_to_mutf8(const ca::u8* data, ca::usize size);
 
 // === Validation ===
-// Check well-formedness without producing output. void-result is Ok when valid.
+// Check well-formedness without producing output; Ok 即合法。校验入口不做有损
+// 替换：@p mode 两种取值都执行严格校验，参数仅为与转换入口 API 对称而保留。
 
 ca::Result<void, EncodingError> validate_utf8(const std::string& utf8);
 ca::Result<void, EncodingError> validate_utf8(const std::string&       utf8,

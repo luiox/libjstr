@@ -119,8 +119,10 @@ Result<u32, EncodingError> decode_utf8_strict(const char* d, usize sz, usize& of
     usize start = off;
     u8    b0    = (u8)d[off];
     usize clen  = ca::str::utf8_code_point_bytes(b0);
-    if (clen == 0 || off + clen > sz)
+    if (clen == 0)
         return Err(make_error(EncodingErrorCode::kInvalidUtf8Sequence, start, "bad utf8"));
+    // 截断与非法首字节区分开，与 MUTF-8 侧解码器的 kUnexpectedEnd 分类保持一致
+    if (off + clen > sz) return Err(make_error(EncodingErrorCode::kUnexpectedEnd, start, "trunc"));
     if (clen == 1) {
         ++off;
         return Ok((u32)b0);
@@ -129,6 +131,10 @@ Result<u32, EncodingError> decode_utf8_strict(const char* d, usize sz, usize& of
         u8 b1 = (u8)d[off + 1];
         if (!is_continuation_byte(b1))
             return Err(make_error(EncodingErrorCode::kInvalidUtf8Sequence, start + 1, "bad cont"));
+        // C0/C1 lead 解出 cp < 0x80，属 overlong 编码，标准 UTF-8 不允许
+        // （ca::str::utf8_is_valid 同样拒绝，两边结论须一致）
+        if (b0 < 0xC2u)
+            return Err(make_error(EncodingErrorCode::kInvalidUtf8Sequence, start, "overlong"));
         off += 2;
         return Ok((u32)(((b0 & 0x1Fu) << 6) | (b1 & 0x3Fu)));
     }
@@ -146,7 +152,8 @@ Result<u32, EncodingError> decode_utf8_strict(const char* d, usize sz, usize& of
     u8 b1 = (u8)d[off + 1], b2 = (u8)d[off + 2], b3 = (u8)d[off + 3];
     if (!is_continuation_byte(b1) || !is_continuation_byte(b2) || !is_continuation_byte(b3))
         return Err(make_error(EncodingErrorCode::kInvalidUtf8Sequence, start, "bad 4b"));
-    if ((b0 == 0xF0u && b1 < 0x90u) || (b0 == 0xF4u && b1 > 0x8Fu))
+    // F5-F7 也会被判为 4 字节 lead，但解出 U+10FFFF 之上的码点，同属非法 UTF-8
+    if (b0 > 0xF4u || (b0 == 0xF0u && b1 < 0x90u) || (b0 == 0xF4u && b1 > 0x8Fu))
         return Err(make_error(EncodingErrorCode::kInvalidUtf8Sequence, start, "range"));
     off += 4;
     return Ok(
@@ -487,22 +494,23 @@ Result<void, EncodingError> validate_utf8(const std::string& u)
 
 Result<void, EncodingError> validate_utf8(const std::string& u, ConversionValidationMode mode)
 {
+    // 校验入口不做有损替换：kLenient 在此与 kStrict 行为一致
+    // （lenient 只有搭配 allow_lossy_replacement 才放行畸形输入），mode 仅为 API 对称保留。
+    (void)mode;
     auto c = validate_common(u.data(), u.size(), "null");
     if (c.is_err()) return Err(c.unwrap_err());
     if (u.empty()) return Ok();
-    if (mode == ConversionValidationMode::kStrict)
-        return validate_utf8_strict_bytes(u.data(), u.size());
-    return Ok();
+    return validate_utf8_strict_bytes(u.data(), u.size());
 }
 
 Result<void, EncodingError> validate_mutf8(MUtf8StringRef m, ConversionValidationMode mode)
 {
+    // 同 validate_utf8：校验恒按 strict 执行，不做有损替换。
+    (void)mode;
     auto c = validate_common(m.data(), m.size(), "null");
     if (c.is_err()) return Err(c.unwrap_err());
     if (m.empty()) return Ok();
-    if (mode == ConversionValidationMode::kStrict)
-        return validate_mutf8_strict_bytes(m.data(), m.size());
-    return Ok();
+    return validate_mutf8_strict_bytes(m.data(), m.size());
 }
 
 Result<std::string, EncodingError> mutf8_to_utf8_strict(MUtf8StringRef m)
