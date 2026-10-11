@@ -1,7 +1,7 @@
 -- libjstr：JVM class 文件 Modified UTF-8（MUTF-8）字符串库（独立构建根）。
 --
 -- 依赖：
---   - libca（luiox-repo git 直连包）：core/str 为运行依赖；版本锁固定 0.0.14，
+--   - libca（luiox-repo git 直连包）：core/str 为运行依赖；版本锁固定 0.0.15，
 --     升级须显式换版。
 --   - gtest（xrepo，仅 --with_tests=y）。
 --
@@ -13,7 +13,7 @@
 set_languages("cxx17")
 add_rules("mode.debug", "mode.release")
 
-add_requires("libca 0.0.14", {configs = {modules = "core,str"}})
+add_requires("libca 0.0.15", {configs = {modules = "core,str"}})
 
 option("with_tests")
     set_default(false)
