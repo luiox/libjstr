@@ -39,3 +39,7 @@ Windows + MSVC 下已配置 `/utf-8` 编译选项。
 
 MUTF-8 边界、`Result` 错误模型、strict/lenient 策略、视图生命周期等关键约定
 都在 [doc/design.md](doc/design.md)。
+
+## License
+
+MIT
