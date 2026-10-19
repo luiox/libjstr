@@ -38,6 +38,9 @@ UTF-8 世界清晰隔开。
   后继续；该标志为 false 时 lenient 仍然拒绝畸形输入。strict 模式下该标志被忽略。
 - 校验入口 `validate_utf8` / `validate_mutf8` 不做有损替换：两种模式都按 strict
   校验，`ConversionValidationMode` 参数仅为与转换入口 API 对称而保留。
+- 错误分类两侧口径一致：截断序列报 `kUnexpectedEnd`，非法序列报对应
+  `kInvalidUtf8Sequence` / `kInvalidMutf8Sequence`。UTF-8 侧截断此前并入
+  `kInvalidUtf8Sequence`，现独立分类——按错误码分支的消费方需同步判断。
 
 每种策略既有「显式传 `ConversionOptions`」的入口，也有
 `*_strict` / `*_lenient` 便捷封装。
