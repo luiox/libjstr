@@ -90,7 +90,7 @@ Windows + MSVC 下已配置 `/utf-8` 编译选项。
 
 ## 依赖
 
-- [libca](https://github.com/luiox/libca)（luiox-repo git 直连包，版本锁 0.0.15）：用 `core`
+- [libca](https://github.com/luiox/libca)（luiox-repo git 直连包，版本锁 0.0.16）：用 `core`
   （`ca::Result`、`ca::usize` 等）与 `str`（字节级 UTF-8 工具）模块；升级须显式换版。
 - gtest：仅 `--with_tests=y` 时拉取，不随库分发给消费方。
 
