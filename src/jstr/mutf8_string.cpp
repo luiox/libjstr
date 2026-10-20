@@ -22,6 +22,8 @@ MUtf8StringRef MUtf8StringRef::from_c_str(const char* c_str) noexcept
 
 std::string_view MUtf8StringRef::as_std_view() const noexcept
 {
+    // 默认构造的空视图 data_ 为空指针，构造 (nullptr, 0) 的 string_view 属未定义行为
+    if (data_ == nullptr) return std::string_view();
     return std::string_view(data_, size_);
 }
 

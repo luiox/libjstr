@@ -179,7 +179,7 @@ TEST(LibJstrConversionTest, LenientLossyMutf8ToUtf8ReplacesRawNulWithUfffd)
 
 // C0/C1 lead 解出 cp < 0x80，属 overlong 编码（如 C0 80 = overlong U+0000、
 // C0 AF = overlong '/'），标准 UTF-8 不允许；strict 必须拒绝，且结论与
-// validate_utf8（走 ca::str::utf8_is_valid，同样拒绝）一致。
+// validate_utf8（共用同一 strict 解码器）一致。
 TEST(LibJstrConversionTest, StrictRejectsOverlongTwoByteUtf8)
 {
     const std::string overlong_nul("\xC0\x80", 2);
@@ -193,7 +193,7 @@ TEST(LibJstrConversionTest, StrictRejectsOverlongTwoByteUtf8)
 }
 
 // F5-F7 同样被判为 4 字节 lead，但解出 U+10FFFF 之上的码点：应报非法 UTF-8，
-// 而非 kUnsupportedCodePoint。
+// 而不是被当成可编码码点接受。
 TEST(LibJstrConversionTest, StrictRejectsOutOfRangeFourByteUtf8Lead)
 {
     const std::string out_of_range("\xF5\x80\x80\x80", 4);
@@ -295,4 +295,60 @@ TEST(LibJstrConversionTest, Latin1ToMutf8AcceptsEmpty)
     auto     res   = latin1_to_mutf8(&dummy, 0);
     ASSERT_TRUE(res.is_ok());
     EXPECT_TRUE(res.unwrap().empty());
+}
+
+// ---- 有损替换粒度：按 maximal subpart，一个畸形序列只产出一个 U+FFFD ----
+
+TEST(LibJstrConversionTest, LenientLossyUtf8TruncatedSequenceProducesSingleReplacement)
+{
+    const std::string input("A\xE4\xB8", 3);   // 3 字节序列缺末字节
+    const std::string expected("A\xEF\xBF\xBD", 4);
+
+    auto converted = utf8_to_mutf8_lenient(input);
+    ASSERT_TRUE(converted.is_ok());
+    EXPECT_EQ(converted.unwrap().bytes(), expected);
+}
+
+TEST(LibJstrConversionTest, LenientLossyUtf8BadContinuationResynchronizes)
+{
+    const std::string input("\xE4\x41\x42", 3);   // E4 后不是续字节
+    const std::string expected("\xEF\xBF\xBD"
+                               "AB",
+                               5);
+
+    auto converted = utf8_to_mutf8_lenient(input);
+    ASSERT_TRUE(converted.is_ok());
+    EXPECT_EQ(converted.unwrap().bytes(), expected);
+}
+
+TEST(LibJstrConversionTest, LenientLossyMutf8TruncatedSequenceProducesSingleReplacement)
+{
+    const std::string input("\xED\xA0", 2);   // 代理单元缺末字节
+    const std::string expected("\xEF\xBF\xBD", 3);
+
+    auto converted = mutf8_to_utf8_lenient(MUtf8StringRef(input.data(), input.size()));
+    ASSERT_TRUE(converted.is_ok());
+    EXPECT_EQ(converted.unwrap(), expected);
+}
+
+TEST(LibJstrConversionTest, LenientLossyMutf8BadContinuationResynchronizes)
+{
+    const std::string input("\xE4\x41\x42", 3);   // E4 后不是续字节
+    const std::string expected("\xEF\xBF\xBD"
+                               "AB",
+                               5);
+
+    auto converted = mutf8_to_utf8_lenient(MUtf8StringRef(input.data(), input.size()));
+    ASSERT_TRUE(converted.is_ok());
+    EXPECT_EQ(converted.unwrap(), expected);
+}
+
+TEST(LibJstrConversionTest, Mutf8ToWtf8OwnedOverloadMatchesView)
+{
+    MUtf8String owned(std::string("A\xED\xA7\x85Z", 5));   // 含未配对高代理
+    auto        from_owned = mutf8_to_wtf8(owned);
+    auto        from_view  = mutf8_to_wtf8(owned.view());
+    ASSERT_TRUE(from_owned.is_ok());
+    ASSERT_TRUE(from_view.is_ok());
+    EXPECT_EQ(from_owned.unwrap(), from_view.unwrap());
 }

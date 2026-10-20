@@ -101,6 +101,45 @@ TEST(LibJstrValidateTest, ValidateUtf8RejectsOverlongTwoByte)
     EXPECT_EQ(r.unwrap_err().code, EncodingErrorCode::kInvalidUtf8Sequence);
 }
 
+// validate_utf8 与转换入口共用 strict 解码器：截断报 kUnexpectedEnd，
+// offset 指向序列首字节（旧实现只返回 kInvalidUtf8Sequence + offset 0）。
+TEST(LibJstrValidateTest, ValidateUtf8ReportsTruncationCodeAndOffset)
+{
+    const std::string trunc("A\xE4\xB8", 3);
+    auto              r = validate_utf8(trunc);
+    ASSERT_TRUE(r.is_err());
+    EXPECT_EQ(r.unwrap_err().code, EncodingErrorCode::kUnexpectedEnd);
+    EXPECT_EQ(r.unwrap_err().offset, 1u);
+}
+
+TEST(LibJstrValidateTest, ValidateUtf8ReportsInvalidByteOffsetMidString)
+{
+    const std::string bad("AB\xFF", 3);
+    auto              r = validate_utf8(bad);
+    ASSERT_TRUE(r.is_err());
+    EXPECT_EQ(r.unwrap_err().code, EncodingErrorCode::kInvalidUtf8Sequence);
+    EXPECT_EQ(r.unwrap_err().offset, 2u);
+}
+
+// 续字节位置非法：offset 指向首个非法字节，而不是序列首字节。
+TEST(LibJstrValidateTest, ValidateUtf8ReportsBadContinuationOffset)
+{
+    const std::string bad("\xE4\x41\x42", 3);
+    auto              r = validate_utf8(bad);
+    ASSERT_TRUE(r.is_err());
+    EXPECT_EQ(r.unwrap_err().code, EncodingErrorCode::kInvalidUtf8Sequence);
+    EXPECT_EQ(r.unwrap_err().offset, 1u);
+}
+
+TEST(LibJstrValidateTest, ValidateMutf8ReportsBadContinuationOffset)
+{
+    const std::string bad("\xE4\x41\x42", 3);
+    auto              r = validate_mutf8(MUtf8StringRef(bad.data(), bad.size()));
+    ASSERT_TRUE(r.is_err());
+    EXPECT_EQ(r.unwrap_err().code, EncodingErrorCode::kInvalidMutf8Sequence);
+    EXPECT_EQ(r.unwrap_err().offset, 1u);
+}
+
 // 孤立低位代理：strict 必须拒绝。
 TEST(LibJstrValidateTest, ValidateMutf8RejectsOrphanLowSurrogate)
 {
@@ -151,4 +190,12 @@ TEST(LibJstrMutf8StringTest, DefaultRefIsEmpty)
     MUtf8StringRef ref;
     EXPECT_TRUE(ref.empty());
     EXPECT_EQ(ref.size(), 0u);
+}
+
+// 空视图的 data() 为空指针：end() 与 as_std_view() 不得做空指针运算。
+TEST(LibJstrMutf8StringTest, DefaultRefEndAndStdViewAreSafe)
+{
+    MUtf8StringRef ref;
+    EXPECT_EQ(ref.begin(), ref.end());
+    EXPECT_TRUE(ref.as_std_view().empty());
 }
