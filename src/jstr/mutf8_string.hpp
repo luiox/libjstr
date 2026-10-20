@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <string>
 #include <string_view>
@@ -7,42 +7,36 @@
 #include "libca/core/datatype.hpp"
 
 /// @file mutf8_string.hpp
-/// @brief Owning and non-owning containers for Modified UTF-8 (MUTF-8) bytes.
+/// @brief Modified UTF-8（MUTF-8）字节的拥有/非拥有容器。
 ///
-/// MUTF-8 is the JVM class-file string encoding (NUL as C0 80, supplementary
-/// code points as surrogate pairs). These types only *hold* bytes — they do not
-/// validate or transcode; use conversion.hpp for that. No method here throws
-/// except where the underlying std::string allocation can (noted per type).
+/// MUTF-8 是 JVM class 文件的字符串编码（NUL 为 C0 80，增补字符为代理对）。
+/// 这两个类型只持有字节，不校验不转码；转码与校验见 conversion.hpp。
+/// 除 std::string 分配失败外，本文件的方法不抛异常。
 
 namespace jstr {
 
-// ============================================================================
-// MUtf8StringRef — non-owning MUTF-8 byte sequence view
-// ============================================================================
-
 class MUtf8String;
 
-/// @brief Non-owning view over a MUTF-8 byte sequence (pointer + length).
+/// @brief MUTF-8 字节序列的非拥有视图（指针 + 长度）。
 ///
-/// Borrows external bytes (class-file buffer, mmap region, literal) with zero
-/// copy. All members are noexcept.
+/// 零拷贝借用外部字节（class 文件缓冲区、mmap 区域、字面量）。所有成员
+/// noexcept。
 ///
-/// @warning The view does not own its bytes and must not outlive them. The bytes
-///          are assumed to already be MUTF-8; no validation is performed here.
+/// @warning 视图不拥有字节，生命周期不得超过所指数据；字节被假定已是
+///          MUTF-8，构造时不做校验。
 class MUtf8StringRef
 {
 public:
-    /// Constructs an empty view (data()==nullptr, size()==0).
+    /// 构造空视图（data()==nullptr，size()==0）。
     MUtf8StringRef() noexcept = default;
 
-    /// Views @p size bytes at @p data. The caller owns the bytes' lifetime.
+    /// 视图化 @p data 处的 @p size 字节；字节生命周期由调用方保证。
     MUtf8StringRef(const char* data, ca::usize size) noexcept;
 
-    /// Views the bytes of @p view. @p view's underlying storage must outlive this.
+    /// 视图化 @p view 的字节；底层存储生命周期由调用方保证。
     explicit MUtf8StringRef(std::string_view view) noexcept;
 
-    /// Builds a view over a NUL-terminated C string; returns an empty view if
-    /// @p c_str is nullptr.
+    /// 视图化 NUL 结尾的 C 字符串；@p c_str 为空时返回空视图。
     static MUtf8StringRef from_c_str(const char* c_str) noexcept;
 
     const char* data() const noexcept { return data_; }
@@ -50,9 +44,10 @@ public:
     bool        empty() const noexcept { return size_ == 0; }
 
     const char* begin() const noexcept { return data_; }
-    const char* end() const noexcept { return data_ + size_; }
+    /// 默认构造的空视图 begin()==end()；空指针不做指针运算。
+    const char* end() const noexcept { return data_ != nullptr ? data_ + size_ : data_; }
 
-    /// Reinterprets the same bytes as a std::string_view (no copy).
+    /// 以 std::string_view 重新解释同一段字节（零拷贝）；空视图返回空 view。
     std::string_view as_std_view() const noexcept;
 
 private:
@@ -61,30 +56,29 @@ private:
 };
 
 // ============================================================================
-// MUtf8String — owned MUTF-8 byte container
+// MUtf8String — MUTF-8 字节的拥有容器
 // ============================================================================
 
-/// @brief Owning container of MUTF-8 bytes (backed by std::string).
+/// @brief MUTF-8 字节的拥有容器（底层 std::string）。
 ///
-/// Holds an independent copy of the bytes. Stored bytes are assumed to be
-/// MUTF-8; the class neither validates nor transcodes (see conversion.hpp).
+/// 持有独立副本，不校验不转码（见 conversion.hpp）。
 ///
-/// @note Constructors allocate and may throw std::bad_alloc / std::length_error.
-///       All accessors are noexcept.
+/// @note 构造函数分配内存，可能抛 std::bad_alloc / std::length_error；
+///       所有访问器 noexcept。
 class MUtf8String
 {
 public:
     MUtf8String() = default;
-    /// Takes ownership of @p bytes (moved in).
+    /// 接管 @p bytes（移动构造）。
     explicit MUtf8String(std::string bytes);
-    /// Copies raw bytes from a byte vector.
+    /// 从字节向量拷贝原始字节。
     explicit MUtf8String(const std::vector<ca::u8>& bytes);
 
     const char* data() const noexcept;
     ca::usize   size() const noexcept;
     bool        empty() const noexcept;
 
-    /// Returns a non-owning view; valid only while this object is alive.
+    /// 返回非拥有视图；仅在本对象存活期间有效。
     MUtf8StringRef view() const noexcept;
 
     const std::string& bytes() const noexcept { return bytes_; }
