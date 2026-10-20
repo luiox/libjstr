@@ -4,17 +4,18 @@ Thanks for considering a contribution.
 
 ## Scope of this library
 
-This is a **C++17 classfile reading / writing / transformation library** that is
-API-compatible with ObjectWeb ASM and behaviourally validated against it. It is
-an independent implementation, not a port.
+This is a **C++17 MUTF-8 boundary library** for JVM class files: typed byte
+containers plus strict/lenient transcoding and validation between Modified UTF-8
+and standard UTF-8. It is deliberately narrow — no string pool, custom allocator,
+UTF-16 container, or general-purpose Unicode library.
 
-If your change would require copying code from ASM or any other third-party
-library, it almost certainly does not belong here.
+If your change would require copying code from another project, it almost
+certainly does not belong here.
 
 ## Before you start
 
-- Open an issue first for anything non-trivial (API shape, new module, new
-  analysis pass). It is much cheaper to agree on a shape than to rework a
+- Open an issue first for anything non-trivial (API shape, new encoding mode,
+  new auxiliary carrier). It is much cheaper to agree on a shape than to rework a
   finished implementation.
 - Small bug fixes and documentation fixes can go straight to a PR.
 
@@ -30,37 +31,40 @@ Then:
 
 ```sh
 xmake f --with_tests=y
-xmake build
-xmake run libjbytecode_asm_core_unittest
+xmake build libjstr
+xmake run libjstr_unittest
 ```
 
-The full test matrix (all suites, coverage and format checks) runs in CI on both
-Windows and Linux.
+CI runs the same build and test target on Windows and Linux.
 
 ## Ground rules
 
-- **Untrusted input is the normal case.** This library parses hostile
-  `.class` files. Any new code path must handle malformed input without
-  crashing, leaking, or looping forever. `doc/safety.md` documents the
-  intended analysis boundary — keep it accurate when you change behaviour.
-- **Document new behaviour at the header.** API detail belongs in Doxygen
-  comments on the declaration; `doc/` holds frozen-level summaries and
-  cross-interface contracts, not API listings.
+- **Malformed input is the normal case.** Every byte sequence read from a class
+  file is untrusted. Decoders must classify malformed input precisely (error code
+  + byte offset) and must never read past the input. A new entry point needs
+  tests for truncation, overlong forms, surrogate edge cases, and
+  resynchronization after an error.
+- **Keep the two encodings apart.** Public APIs take either `MUtf8StringRef` /
+  `MUtf8String` or standard UTF-8 `std::string`; do not add a bare string
+  parameter whose encoding is ambiguous.
+- **Document behaviour at the header.** API detail belongs in Doxygen comments
+  on the declaration; `doc/design.md` records design trade-offs, not API
+  listings.
 - **Add tests that fail without your change.** A test that passes before and
   after proves nothing.
-- **Do not weaken an assertion to make a test pass.** If the assertion is
-  wrong, fix the assertion deliberately and say why in the commit message.
+- **Do not weaken an assertion to make a test pass.** If the assertion is wrong,
+  fix it deliberately and say why in the commit message.
 
 ## Style
 
-- Follow the surrounding file. The project uses `.clang-format`; CI enforces it.
+- Follow the surrounding file. 4-space indent, K&R braces, 120-column limit.
 - Comments explain *why*, not *what*. The code already says what.
-- Keep translation units free of business logic; the headers carry the contract.
+- Chinese comments with English technical terms are the norm in this repository.
 
 ## Commit messages
 
-One logical change per commit. Describe the observable behaviour change and any
-analysis-boundary implication; the diff already shows the mechanics.
+One logical change per commit. Describe the observable behaviour change; the
+diff already shows the mechanics.
 
 ## License
 
