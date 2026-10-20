@@ -4,20 +4,23 @@ JVM class 文件的 **MUTF-8** 编码边界：类型化字符串容器，以及�
 
 JVM 在 class 文件里用 **Modified UTF-8** 存储所有字符串：NUL 编码为 `C0 80`、增补字符编码为 6 字节代理对，
 与标准 UTF-8 在这两处不同。libjstr 用类型把两个编码世界隔开——容器只管持有 MUTF-8 字节，
-conversion 模块负责互转与校验，所有入口返回 `ca::Result`、不抛异常。
+conversion 模块负责互转与校验。畸形输入通过 `ca::Result` 返回错误，不抛异常；内存分配失败仍按
+C++ 常规语义抛 `std::bad_alloc`（超大输入可能抛 `std::length_error`）。
 
 ## 特性
 
 - **类型化容器**：`MUtf8String`（拥有字节）/ `MUtf8StringRef`（零拷贝视图，适合引用 class 文件
   缓冲区）。只存字节，不校验不转码，杜绝裸 `std::string` 混用两种编码。
 - **互转与校验**：`utf8_to_mutf8` / `mutf8_to_utf8` / `validate_utf8` / `validate_mutf8`；
-  失败时返回带错误码与出错字节 `offset` 的 `EncodingError`，不抛异常。
+  失败时返回带错误码与出错字节 `offset` 的 `EncodingError`，畸形输入不抛异常。
 - **strict / lenient 两档**：strict 对任何畸形序列报精确错误；lenient 仅在与
-  `allow_lossy_replacement` 搭配时以 `U+FFFD` 有损续行，单独使用仍然拒绝；校验入口恒按 strict 执行。
+  `allow_lossy_replacement` 搭配时以 `U+FFFD` 有损续行（一个畸形序列按 maximal subpart
+  只替换一次），单独使用仍然拒绝；校验入口恒按 strict 执行。
 - **边界语义完整**：NUL ↔ `C0 80`、增补字符 ↔ 6 字节代理对；overlong（UTF-8 与 MUTF-8 两侧）、
-  裸 NUL、孤立/未配对代理一律拒绝；截断序列单独报 `kUnexpectedEnd`。
+  裸 NUL、孤立/未配对代理一律拒绝；截断序列单独报 `kUnexpectedEnd`，offset 指向序列首字节或
+  首个非法续字节。
 - **辅助载体**：WTF-8（逐码元保留代理，成对代理不合并为 4 字节）与 Latin-1（逐字节独立编码，
-  永不失败），覆盖字节流密文等非 UTF-8 场景。
+  任意字节内容都可编码，仅空指针配非零长度报错），覆盖字节流密文等非 UTF-8 场景。
 
 ## 快速开始
 
@@ -45,7 +48,7 @@ int main()
 {
     using namespace jstr;
 
-    // 标准 UTF-8 → MUTF-8：strict 模式，任何畸形序列报精确错误，不抛异常
+    // 标准 UTF-8 → MUTF-8：strict 模式，畸形输入返回带 offset 的错误，不抛异常
     auto encoded = utf8_to_mutf8("caf\xC3\xA9 \xF0\x9F\x98\x80");   // "café 😀"
     if (encoded.is_err()) return 1;
     const MUtf8String mutf8 = encoded.unwrap();   // 拥有 MUTF-8 字节的容器

@@ -27,20 +27,23 @@ UTF-8 世界清晰隔开。
 ### 错误处理用 Result，不抛异常
 
 所有转换/校验入口返回 `ca::Result<T, EncodingError>`，即使输入畸形也是**返回
-错误码而非抛异常**。`EncodingError` 带 `code`（区分截断/非法 UTF-8/非法 MUTF-8/
-不支持码点等）和出错字节 `offset`。唯一可能抛的是 `MUtf8String` 构造时底层
-`std::string` 的分配失败（已在头文件注明）。
+错误码而非抛异常**。`EncodingError` 带 `code`（区分截断/非法 UTF-8/非法 MUTF-8）
+和出错字节 `offset`：序列级错误（overlong、代理、越界码点）指向序列首字节，续字节
+错误指向首个非法字节，截断指向序列首字节。内存分配失败不在此承诺内——`std::string`
+扩容可能抛 `std::bad_alloc` / `std::length_error`，与 C++ 容器语义一致。
 
 ### strict / lenient 两档策略
 
 - **strict**（默认）：任何畸形序列都报精确错误，代理对不完整或非法组合一律拒绝。
+  MUTF-8 校验要求代理成对出现：高代理后必须紧跟低代理，孤立低代理拒绝。
 - **lenient**：仅当 `allow_lossy_replacement=true` 时，把畸形序列替换为 `U+FFFD`
-  后继续；该标志为 false 时 lenient 仍然拒绝畸形输入。strict 模式下该标志被忽略。
+  后继续；替换按 Unicode 建议的 maximal subpart 进行——一个畸形序列只产出一个
+  替换符（截断序列整体算一个），不会逐字节连发多个 `U+FFFD`。该标志为 false 时
+  lenient 仍然拒绝畸形输入。strict 模式下该标志被忽略。
 - 校验入口 `validate_utf8` / `validate_mutf8` 不做有损替换：两种模式都按 strict
   校验，`ConversionValidationMode` 参数仅为与转换入口 API 对称而保留。
-- 错误分类两侧口径一致：截断序列报 `kUnexpectedEnd`，非法序列报对应
-  `kInvalidUtf8Sequence` / `kInvalidMutf8Sequence`。UTF-8 侧截断此前并入
-  `kInvalidUtf8Sequence`，现独立分类——按错误码分支的消费方需同步判断。
+- 校验入口与转换入口共用同一 strict 解码器，错误码与 offset 口径一致：截断序列报
+  `kUnexpectedEnd`，非法序列报对应 `kInvalidUtf8Sequence` / `kInvalidMutf8Sequence`。
 
 每种策略既有「显式传 `ConversionOptions`」的入口，也有
 `*_strict` / `*_lenient` 便捷封装。
