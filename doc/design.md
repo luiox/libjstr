@@ -9,8 +9,9 @@ NUL（U+0000）编码为 `C0 80`，BMP 外的增补字符编码为「代理对�
 class 文件的字节世界和程序内其余部分（日志、文件系统、LLVM 交互）的标准
 UTF-8 世界清晰隔开。
 
-定位是**窄域库**：只做 MUTF-8 容器 + 转换校验，不含字符串池、分配器、UTF-16
-等更大设想（早期草案有过，未落地，已从本库剔除）。
+定位是**窄域库**：只做 MUTF-8 容器、转换校验，以及与 JVM String 码元（UTF-16
+code unit）的逐字互转。不提供通用 UTF-16 字符串类型、字符串池或分配器；早期草案
+的通用文本抽象未落地，已从本库剔除。
 
 ## 库的形态
 
@@ -20,7 +21,8 @@ UTF-8 世界清晰隔开。
 - **`mutf8_string`** —— MUTF-8 字节容器：`MUtf8String`（拥有）/
   `MUtf8StringRef`（非拥有视图）。只持有字节，不校验不转码。
 - **`conversion`** —— UTF-8 ⇄ MUTF-8 转换 + 校验，是两个编码世界的边界；另提供
-  WTF-8（逐码元保留代理，成对代理不合并为 4 字节）与 Latin-1 辅助转换。
+  WTF-8（逐码元保留代理，成对代理不合并为 4 字节）、Latin-1 辅助转换，以及
+  MUTF-8 ⇄ UTF-16 code unit 的逐字转码。
 
 ## 关键设计决策
 
@@ -48,6 +50,18 @@ UTF-8 世界清晰隔开。
 每种策略既有「显式传 `ConversionOptions`」的入口，也有
 `*_strict` / `*_lenient` 便捷封装。
 
+### UTF-16 code unit 桥
+
+class 文件常量按 UTF-16 code unit 编码：增补字符写成两个 3 字节代理单元，Java
+String 也允许孤立代理。`mutf8_to_utf16` / `utf16_to_mutf8` 因此按 code unit
+逐字转码，不配对、不归并：成对代理保持两个单元，未配对代理原样保留。这与
+`mutf8_to_utf8` 的语义不同，后者以标准 UTF-8 为目标，必须拒绝孤立代理。
+
+默认 strict 只接受规范 MUTF-8。`Mutf8ToUtf16Options` 提供两个显式宽容开关，
+用于分析混淆器或错误工具产出的畸形 class 文件：`allow_raw_nul`（裸 0x00 当作
+U+0000）与 `allow_standard_utf8_four_byte`（标准 UTF-8 四字节序列展开为代理对）。
+开关默认关闭，开启后仍拒绝 overlong、越界码点与非法续字节。
+
 ### 拥有 vs 视图
 
 `MUtf8StringRef` 是零拷贝视图（指针+长度），用于引用 class 文件缓冲区/内存映射
@@ -71,7 +85,7 @@ UTF-8 项都走这条路）。
 ## 测试
 
 - `unittest/conversion_test.cpp`：核心转换（NUL→C0 80、增补字符代理对、
-  strict/lenient、错误码、有损替换）。
+  strict/lenient、错误码、有损替换、UTF-16 code unit 桥与宽容开关）。
 - `unittest/validation_test.cpp`：`validate_utf8`/`validate_mutf8` 与
   `MUtf8String`/`MUtf8StringRef` 访问器。
 

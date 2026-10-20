@@ -13,12 +13,15 @@ C++ 常规语义抛 `std::bad_alloc`（超大输入可能抛 `std::length_error`
   缓冲区）。只存字节，不校验不转码，杜绝裸 `std::string` 混用两种编码。
 - **互转与校验**：`utf8_to_mutf8` / `mutf8_to_utf8` / `validate_utf8` / `validate_mutf8`；
   失败时返回带错误码与出错字节 `offset` 的 `EncodingError`，畸形输入不抛异常。
+- **JVM String 码元桥**：`mutf8_to_utf16` / `utf16_to_mutf8` 按 UTF-16 code unit
+  逐字转码，成对代理保持两个单元，未配对代理原样保留；可选容忍混淆器写出的裸 NUL
+  与标准 UTF-8 四字节序列。
 - **strict / lenient 两档**：strict 对任何畸形序列报精确错误；lenient 仅在与
   `allow_lossy_replacement` 搭配时以 `U+FFFD` 有损续行（一个畸形序列按 maximal subpart
   只替换一次），单独使用仍然拒绝；校验入口恒按 strict 执行。
 - **边界语义完整**：NUL ↔ `C0 80`、增补字符 ↔ 6 字节代理对；overlong（UTF-8 与 MUTF-8 两侧）、
-  裸 NUL、孤立/未配对代理一律拒绝；截断序列单独报 `kUnexpectedEnd`，offset 指向序列首字节或
-  首个非法续字节。
+  裸 NUL 一律拒绝；UTF-8 出口拒绝孤立/未配对代理，UTF-16 code unit 出口按 JVM String
+  语义原样保留；截断序列单独报 `kUnexpectedEnd`，offset 指向序列首字节或首个非法续字节。
 - **辅助载体**：WTF-8（逐码元保留代理，成对代理不合并为 4 字节）与 Latin-1（逐字节独立编码，
   任意字节内容都可编码，仅空指针配非零长度报错），覆盖字节流密文等非 UTF-8 场景。
 
@@ -87,7 +90,7 @@ Windows + MSVC 下已配置 `/utf-8` 编译选项。
 | 模块 | 职责 |
 |------|------|
 | `mutf8_string` | MUTF-8 字节容器：`MUtf8String`（拥有）/ `MUtf8StringRef`（视图），只存字节 |
-| `conversion`   | UTF-8 ⇄ MUTF-8 转换 + 校验，WTF-8 / Latin-1 辅助载体，错误码与策略选项 |
+| `conversion`   | UTF-8 ⇄ MUTF-8 转换 + 校验，UTF-16 code unit 桥，WTF-8 / Latin-1 辅助载体，错误码与策略选项 |
 
 源码在 `src/jstr/`，单元测试在 `unittest/`。
 

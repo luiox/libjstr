@@ -352,3 +352,104 @@ TEST(LibJstrConversionTest, Mutf8ToWtf8OwnedOverloadMatchesView)
     ASSERT_TRUE(from_view.is_ok());
     EXPECT_EQ(from_owned.unwrap(), from_view.unwrap());
 }
+
+// ---- MUTF-8 <-> UTF-16 code units ----
+
+TEST(LibJstrConversionTest, Mutf8ToUtf16KeepsCodeUnitsAndSurrogatePairs)
+{
+    const std::string mutf8("A\xC0\x80\xED\xA0\xBD\xED\xB8\x80", 9);
+    auto              decoded = mutf8_to_utf16(MUtf8StringRef(mutf8.data(), mutf8.size()));
+    ASSERT_TRUE(decoded.is_ok());
+    const std::u16string expected{0x0041, 0x0000, 0xD83D, 0xDE00};
+    EXPECT_TRUE(decoded.unwrap() == expected);
+
+    auto back = utf16_to_mutf8(expected);
+    ASSERT_TRUE(back.is_ok());
+    EXPECT_EQ(back.unwrap().bytes(), mutf8);
+}
+
+TEST(LibJstrConversionTest, Mutf8ToUtf16PreservesUnpairedSurrogate)
+{
+    const std::string    mutf8("\xED\xA7\x85", 3);
+    auto                 decoded = mutf8_to_utf16(MUtf8StringRef(mutf8.data(), mutf8.size()));
+    ASSERT_TRUE(decoded.is_ok());
+    const std::u16string expected{0xD9C5};
+    EXPECT_TRUE(decoded.unwrap() == expected);
+
+    auto back = utf16_to_mutf8(expected);
+    ASSERT_TRUE(back.is_ok());
+    EXPECT_EQ(back.unwrap().bytes(), mutf8);
+}
+
+TEST(LibJstrConversionTest, Mutf8ToUtf16RejectsRawNulByDefault)
+{
+    const std::string input("a\0b", 3);
+    auto              res = mutf8_to_utf16(MUtf8StringRef(input.data(), input.size()));
+    ASSERT_TRUE(res.is_err());
+    EXPECT_EQ(res.unwrap_err().code, EncodingErrorCode::kInvalidMutf8Sequence);
+    EXPECT_EQ(res.unwrap_err().offset, 1u);
+}
+
+TEST(LibJstrConversionTest, Mutf8ToUtf16AcceptsRawNulWhenAllowed)
+{
+    const std::string   input("a\0b", 3);
+    Mutf8ToUtf16Options options;
+    options.allow_raw_nul = true;
+    auto res = mutf8_to_utf16(MUtf8StringRef(input.data(), input.size()), options);
+    ASSERT_TRUE(res.is_ok());
+    const std::u16string expected{0x0061, 0x0000, 0x0062};
+    EXPECT_TRUE(res.unwrap() == expected);
+}
+
+TEST(LibJstrConversionTest, Mutf8ToUtf16RejectsFourByteUtf8ByDefault)
+{
+    const std::string input("\xF0\x9F\x98\x80", 4);
+    auto              res = mutf8_to_utf16(MUtf8StringRef(input.data(), input.size()));
+    ASSERT_TRUE(res.is_err());
+    EXPECT_EQ(res.unwrap_err().code, EncodingErrorCode::kInvalidMutf8Sequence);
+}
+
+TEST(LibJstrConversionTest, Mutf8ToUtf16AcceptsFourByteUtf8WhenAllowed)
+{
+    const std::string   input("\xF0\x9F\x98\x80", 4);
+    Mutf8ToUtf16Options options;
+    options.allow_standard_utf8_four_byte = true;
+    auto res = mutf8_to_utf16(MUtf8StringRef(input.data(), input.size()), options);
+    ASSERT_TRUE(res.is_ok());
+    const std::u16string expected{0xD83D, 0xDE00};
+    EXPECT_TRUE(res.unwrap() == expected);
+
+    // UTF-16 -> MUTF-8 永远按 code unit 逐字编码，产出 CESU-8 形态。
+    auto back = utf16_to_mutf8(expected);
+    ASSERT_TRUE(back.is_ok());
+    EXPECT_EQ(back.unwrap().bytes(), std::string("\xED\xA0\xBD\xED\xB8\x80", 6));
+}
+
+TEST(LibJstrConversionTest, Mutf8ToUtf16RejectsOutOfRangeFourByteWhenAllowed)
+{
+    const std::string   input("\xF5\x80\x80\x80", 4);
+    Mutf8ToUtf16Options options;
+    options.allow_standard_utf8_four_byte = true;
+    auto res = mutf8_to_utf16(MUtf8StringRef(input.data(), input.size()), options);
+    ASSERT_TRUE(res.is_err());
+    EXPECT_EQ(res.unwrap_err().code, EncodingErrorCode::kInvalidUtf8Sequence);
+}
+
+TEST(LibJstrConversionTest, Mutf8ToUtf16RejectsTruncatedSequence)
+{
+    const std::string input("\xE4\xB8", 2);
+    auto              res = mutf8_to_utf16(MUtf8StringRef(input.data(), input.size()));
+    ASSERT_TRUE(res.is_err());
+    EXPECT_EQ(res.unwrap_err().code, EncodingErrorCode::kUnexpectedEnd);
+}
+
+TEST(LibJstrConversionTest, Mutf8Utf16EmptyRoundtrip)
+{
+    auto to_utf16 = mutf8_to_utf16(MUtf8StringRef());
+    ASSERT_TRUE(to_utf16.is_ok());
+    EXPECT_TRUE(to_utf16.unwrap().empty());
+
+    auto to_mutf8 = utf16_to_mutf8(std::u16string_view{});
+    ASSERT_TRUE(to_mutf8.is_ok());
+    EXPECT_TRUE(to_mutf8.unwrap().empty());
+}
