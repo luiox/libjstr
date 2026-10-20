@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 
 #include "libca/core/result.hpp"
 #include "libca/core/datatype.hpp"
@@ -75,6 +76,43 @@ ca::Result<std::string, EncodingError> mutf8_to_utf8(const MUtf8String& mutf8,
 /// 普通文本请用 mutf8_to_utf8。
 ca::Result<std::string, EncodingError> mutf8_to_wtf8(MUtf8StringRef mutf8);
 ca::Result<std::string, EncodingError> mutf8_to_wtf8(const MUtf8String& mutf8);
+
+// === MUTF-8 <-> UTF-16 code units ===
+// 逐 UTF-16 code unit 转码：NUL 对应 C0 80，增补字符保持两个 3 字节代理单元，
+// 未配对代理原样保留。与 mutf8_to_utf8 不同，这些入口不做代理配对与合法性
+// 归并，面向需要直接表达 JVM String 码元的场景（常量池文本、字节码重写）。
+
+/// @brief MUTF-8 -> UTF-16 的解码选项。
+///
+/// 两个开关默认关闭；开启后接受 MUTF-8 规范之外的编码，仅用于容忍混淆器或
+/// 错误工具产出的 class 文件。MUTF-8 规范只允许 1-3 字节的 code unit 编码，
+/// 且 NUL 必须写成 C0 80。
+struct Mutf8ToUtf16Options
+{
+    bool allow_raw_nul = false;                  ///< 接受裸 0x00 并当作 U+0000。
+    bool allow_standard_utf8_four_byte = false;  ///< 接受标准 UTF-8 四字节序列，展开为代理对。
+};
+
+/// @brief MUTF-8 -> UTF-16 code units。
+///
+/// 默认 strict：拒绝裸 NUL、截断、overlong、非法续字节与四字节序列；未配对
+/// 代理不视为错误（MUTF-8 按 code unit 编码，Java String 允许孤立代理）。
+/// @param mutf8 输入的 MUTF-8 字节。
+/// @param options 宽容开关；默认全部关闭。
+/// @return 成功时返回 UTF-16 code unit 序列；失败时返回带偏移的 EncodingError。
+ca::Result<std::u16string, EncodingError> mutf8_to_utf16(MUtf8StringRef mutf8);
+ca::Result<std::u16string, EncodingError> mutf8_to_utf16(const MUtf8String& mutf8);
+ca::Result<std::u16string, EncodingError> mutf8_to_utf16(MUtf8StringRef      mutf8,
+                                                         Mutf8ToUtf16Options options);
+ca::Result<std::u16string, EncodingError> mutf8_to_utf16(const MUtf8String&  mutf8,
+                                                         Mutf8ToUtf16Options options);
+
+/// @brief UTF-16 code units -> MUTF-8。
+///
+/// 逐 code unit 编码，成对代理保持两个 3 字节单元（CESU-8 形态），未配对代理
+/// 原样保留；NUL 编码为 C0 80。任意 u16 序列都可编码，唯一错误是空指针配
+/// 非零长度。
+ca::Result<MUtf8String, EncodingError> utf16_to_mutf8(std::u16string_view utf16);
 
 // === UTF-8 -> MUTF-8 ===
 // 把标准 UTF-8 编码为 class 文件字节。默认 strict；畸形输入以 EncodingError

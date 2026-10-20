@@ -479,6 +479,64 @@ Result<std::string, EncodingError> mutf8_to_wtf8(const MUtf8String& m)
     return mutf8_to_wtf8(m.view());
 }
 
+// ===== MUTF-8 <-> UTF-16 code units =====
+
+Result<std::u16string, EncodingError> mutf8_to_utf16(MUtf8StringRef m, Mutf8ToUtf16Options opts)
+{
+    auto valid = validate_common(m.data(), m.size(), "null");
+    if (valid.is_err()) return Err(valid.unwrap_err());
+
+    std::u16string result;
+    result.reserve(m.size());
+    usize offset = 0;
+    while (offset < m.size()) {
+        const u8 b0 = static_cast<u8>(m.data()[offset]);
+        if (b0 == 0 && opts.allow_raw_nul) {
+            ++offset;
+            result.push_back(0);
+            continue;
+        }
+        if (b0 >= 0xF0u && opts.allow_standard_utf8_four_byte) {
+            auto cp = decode_wtf8_code_point(m.data(), m.size(), offset);
+            if (cp.is_err()) return Err(cp.unwrap_err());
+            const u32 v = cp.unwrap() - 0x10000u;
+            result.push_back(static_cast<u16>(0xD800u + (v >> 10)));
+            result.push_back(static_cast<u16>(0xDC00u + (v & 0x3FFu)));
+            continue;
+        }
+        auto unit = decode_mutf8_strict(m.data(), m.size(), offset);
+        if (unit.is_err()) return Err(unit.unwrap_err());
+        result.push_back(unit.unwrap());
+    }
+    return Ok(std::move(result));
+}
+
+Result<std::u16string, EncodingError> mutf8_to_utf16(MUtf8StringRef m)
+{
+    return mutf8_to_utf16(m, Mutf8ToUtf16Options{});
+}
+
+Result<std::u16string, EncodingError> mutf8_to_utf16(const MUtf8String& m)
+{
+    return mutf8_to_utf16(m.view());
+}
+
+Result<std::u16string, EncodingError> mutf8_to_utf16(const MUtf8String& m, Mutf8ToUtf16Options opts)
+{
+    return mutf8_to_utf16(m.view(), opts);
+}
+
+Result<MUtf8String, EncodingError> utf16_to_mutf8(std::u16string_view u)
+{
+    if (u.data() == nullptr && !u.empty()) {
+        return Err(make_error(EncodingErrorCode::kInvalidInput, 0, "null"));
+    }
+    std::string result;
+    result.reserve(u.size());
+    for (const u16 unit : u) append_mutf8_unit(result, unit);
+    return Ok(MUtf8String(std::move(result)));
+}
+
 Result<MUtf8String, EncodingError> utf8_to_mutf8(const std::string& u)
 {
     return utf8_to_mutf8(u, ConversionOptions{});
