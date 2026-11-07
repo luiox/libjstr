@@ -1,3 +1,7 @@
+/// @defgroup conversion UTF-8 ⇄ MUTF-8 转换与校验
+///
+/// 两个编码世界的边界：入口一律返回 ca::Result 而不抛异常，strict/lenient
+/// 两档策略与错误 offset 口径见 doc:design-error-model。
 #pragma once
 
 #include <string>
@@ -98,10 +102,17 @@ struct Mutf8ToUtf16Options
 /// 默认 strict：拒绝裸 NUL、截断、overlong、非法续字节与四字节序列；未配对
 /// 代理不视为错误（MUTF-8 按 code unit 编码，Java String 允许孤立代理）。
 /// @param mutf8 输入的 MUTF-8 字节。
-/// @param options 宽容开关；默认全部关闭。
 /// @return 成功时返回 UTF-16 code unit 序列；失败时返回带偏移的 EncodingError。
 ca::Result<std::u16string, EncodingError> mutf8_to_utf16(MUtf8StringRef mutf8);
 ca::Result<std::u16string, EncodingError> mutf8_to_utf16(const MUtf8String& mutf8);
+
+/// @brief MUTF-8 -> UTF-16 code units（带宽容开关）。
+///
+/// strict 口径同无开关重载；allow_raw_nul 接受裸 0x00 并当作 U+0000，
+/// allow_standard_utf8_four_byte 接受标准 UTF-8 四字节序列并展开为代理对。
+/// @param mutf8 输入的 MUTF-8 字节。
+/// @param options 宽容开关；默认全部关闭。
+/// @return 成功时返回 UTF-16 code unit 序列；失败时返回带偏移的 EncodingError。
 ca::Result<std::u16string, EncodingError> mutf8_to_utf16(MUtf8StringRef      mutf8,
                                                          Mutf8ToUtf16Options options);
 ca::Result<std::u16string, EncodingError> mutf8_to_utf16(const MUtf8String&  mutf8,

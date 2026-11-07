@@ -107,4 +107,5 @@ Windows + MSVC 下已配置 `/utf-8` 编译选项。
 ## 深入阅读
 
 MUTF-8 边界、`Result` 错误模型、strict/lenient 策略、视图生命周期等设计取舍见
-[doc/design.md](doc/design.md)。
+`doc/design.rst`（Sphinx 构建：`pip install "sphinx==9.1.1" && sphinx-build -b html doc doc/_build`）；
+API 级契约见头文件 `///` 注释与 `doxygen doc/Doxyfile` 生成的微观层站点。
