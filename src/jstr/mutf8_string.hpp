@@ -1,3 +1,7 @@
+/// @defgroup mutf8_string MUTF-8 字节容器（拥有/视图）
+///
+/// MUtf8String 拥有副本，MUtf8StringRef 是零拷贝视图且生命周期不得超过所指
+/// 字节；两者只存字节，合法性归 conversion 模块。取舍见 doc:design-ownership。
 #pragma once
 
 #include <string>
