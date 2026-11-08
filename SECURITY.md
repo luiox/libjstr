@@ -42,5 +42,5 @@ Out of scope:
 - business meaning carried by the input; this library validates the encoding
   layer only
 
-These boundaries are described in `doc/design.md`; behaviour matching them is a
+These boundaries are described in `doc/design.rst`; behaviour matching them is a
 documented design decision, not a vulnerability.
