@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Security fixes land only in the newest published package version — the commit
+Security fixes land only in the newest published package version: the commit
 pinned by the latest `libjstr` entry in
 [luiox-repo](https://github.com/luiox/luiox-repo). Older versions are not
 backported. The repository has no GitHub release tags; the package entry is the

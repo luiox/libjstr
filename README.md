@@ -3,7 +3,7 @@
 JVM class 文件的 **MUTF-8** 编码边界：类型化字符串容器，以及与标准 UTF-8 的互转/校验（C++17 / xmake）。
 
 JVM 在 class 文件里用 **Modified UTF-8** 存储所有字符串：NUL 编码为 `C0 80`、增补字符编码为 6 字节代理对，
-与标准 UTF-8 在这两处不同。libjstr 用类型把两个编码世界隔开——容器只管持有 MUTF-8 字节，
+与标准 UTF-8 在这两处不同。libjstr 用类型把两个编码世界隔开，容器只管持有 MUTF-8 字节，
 conversion 模块负责互转与校验。畸形输入通过 `ca::Result` 返回错误，不抛异常；内存分配失败仍按
 C++ 常规语义抛 `std::bad_alloc`（超大输入可能抛 `std::length_error`）。
 
